@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'yandex' => [
+        'api_key' => env('YANDEX_API_KEY'),
+        'folder_id' => env('YANDEX_FOLDER_ID'),
+    ],
+
 ];
