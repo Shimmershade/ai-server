@@ -1,0 +1,13 @@
+{
+    "name": "AI server",
+    "image": "mcr.microsoft.com/devcontainers/php:8.2",
+    "features": {
+        "ghcr.io/devcontainers/features/git:1": {},
+        "ghcr.io/devcontainers/features/node:1": {}
+    },
+    "postCreateCommand": "bash .devcontainer/setup-codespaces.sh",
+    "remoteEnv": {
+        "YANDEX_API_KEY": "${localEnv:YANDEX_API_KEY}",
+        "YANDEX_FOLDER_ID": "${localEnv:YANDEX_FOLDER_ID}"
+    }
+}

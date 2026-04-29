@@ -20,7 +20,24 @@ class LLMController extends Controller
             'temperature' => $request->input('temperature', 0.3),
             'max_output_tokens' => $request->input('max_tokens', 500)
         ]);
-        
-        return response()->json($response->json(), $response->status());
+
+        $data = $response->json();
+    
+    $answer = $this->extractAnswer($data);
+    
+    return response()->json(['answer' => $answer]);
+}
+
+private function extractAnswer($data) {
+    foreach ($data['output'] ?? [] as $output_item) {
+        if (($output_item['type'] ?? null) === 'message') {
+            foreach ($output_item['content'] ?? [] as $content) {
+                if (($content['type'] ?? null) === 'output_text') {
+                    return $content['text'] ?? '';
+                }
+            }
+        }
     }
+    return null;
+}
 }
