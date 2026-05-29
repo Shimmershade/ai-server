@@ -1,0 +1,138 @@
+diff --git a/app/app/Services/LLM/YandexLLMClient.php b/app/app/Services/LLM/YandexLLMClient.php
+index 6b59c6c..a60f58d 100644
+--- a/app/app/Services/LLM/YandexLLMClient.php
++++ b/app/app/Services/LLM/YandexLLMClient.php
+@@ -1,4 +1,6 @@
+ <?php
++// app/Services/LLM/YandexLLMClient.php
++
+ namespace App\Services\LLM;
+ 
+ use Illuminate\Support\Facades\Http;
+@@ -20,7 +22,7 @@ public function __construct()
+     public function ask(string $instructions, string $input, float $temperature = 0.3, int $maxTokens = 500): array
+     {
+         try {
+-            $response = Http::timeout(120)
++            $response = Http::timeout(60)
+                 ->retry(3, 100)
+                 ->withHeaders([
+                     'Content-Type' => 'application/json',
+@@ -36,21 +38,29 @@ public function ask(string $instructions, string $input, float $temperature = 0.
+                 ]);
+             
+             if ($response->failed()) {
+-                throw new \Exception('Yandex API error: ' . $response->body());
++                return [
++                    'success' => false,
++                    'error' => 'HTTP Error: ' . $response->status() . ' - ' . $response->body()
++                ];
+             }
+             
+-            $data = $response->json();
++            $fullResponse = $response->json();
+             
+-            $answer = $data['output']['message']['content'] ?? $data['result']['message']['content'] ?? $data['text'] ?? null;
++            // Парсим ответ в формате Yandex API
++            $answer = $this->extractAnswerFromYandexResponse($fullResponse);
+             
+-            if (!$answer) {
+-                throw new \Exception('Invalid response format from Yandex API');
++            if ($answer) {
++                return [
++                    'success' => true,
++                    'content' => $answer,
++                    'raw' => $fullResponse
++                ];
+             }
+             
+             return [
+-                'success' => true,
+-                'content' => $answer,
+-                'raw' => $data
++                'success' => false,
++                'error' => 'Could not extract answer from Yandex API response',
++                'debug_response' => $fullResponse
+             ];
+             
+         } catch (RequestException $e) {
+@@ -65,4 +75,78 @@ public function ask(string $instructions, string $input, float $temperature = 0.
+             ];
+         }
+     }
++    
++    /**
++     * Извлекает текст ответа из структуры Yandex API
++     * 
++     * Структура ответа:
++     * {
++     *   "output": [
++     *     { "type": "reasoning", ... },
++     *     {
++     *       "type": "message",
++     *       "content": [
++     *         { "type": "output_text", "text": "..." }
++     *       ]
++     *     }
++     *   ]
++     * }
++     */
++    private function extractAnswerFromYandexResponse(array $response): ?string
++    {
++        // Проверяем наличие output массива
++        if (!isset($response['output']) || !is_array($response['output'])) {
++            return null;
++        }
++        
++        // Ищем в output сообщение типа "message"
++        foreach ($response['output'] as $outputItem) {
++            if (isset($outputItem['type']) && $outputItem['type'] === 'message') {
++                // Проверяем content массив
++                if (isset($outputItem['content']) && is_array($outputItem['content'])) {
++                    foreach ($outputItem['content'] as $contentItem) {
++                        // Ищем текст в output_text
++                        if (isset($contentItem['type']) && $contentItem['type'] === 'output_text') {
++                            if (isset($contentItem['text'])) {
++                                return $contentItem['text'];
++                            }
++                        }
++                        // Альтернативный формат
++                        if (isset($contentItem['text'])) {
++                            return $contentItem['text'];
++                        }
++                    }
++                }
++            }
++        }
++        
++        // Fallback: ищем любой текст рекурсивно
++        return $this->findAnyText($response);
++    }
++    
++    /**
++     * Рекурсивный поиск текста в ответе (fallback)
++     */
++    private function findAnyText(array $data, int $depth = 0): ?string
++    {
++        if ($depth > 5) {
++            return null;
++        }
++        
++        foreach ($data as $key => $value) {
++            // Ищем ключи, которые могут содержать текст
++            if (in_array($key, ['text', 'content', 'message']) && is_string($value) && strlen($value) > 10) {
++                return $value;
++            }
++            
++            if (is_array($value)) {
++                $result = $this->findAnyText($value, $depth + 1);
++                if ($result) {
++                    return $result;
++                }
++            }
++        }
++        
++        return null;
++    }
+ }
+\ No newline at end of file
